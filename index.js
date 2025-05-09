@@ -20,6 +20,10 @@ const typeDefs = gql`
     users: [User]
     user(id: ID!): User
   }
+
+  type Mutation {
+    registerUser(id: ID!, name: String!, email: String!, password: String!): User
+  }
 `;
 
 // Resolvers 实现
@@ -44,7 +48,7 @@ async function startServer() {
   server.applyMiddleware({ app });
 
   app.listen(4000, () => {
-    console.log(`Server running at http://localhost:${PORT}/graphql`);
+    console.log(`Server running at http://localhost:4000/graphql`);
   });
 }
 
