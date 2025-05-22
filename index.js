@@ -1,19 +1,32 @@
 const express = require('express');
 const { ApolloServer, gql } = require('apollo-server-express');
+const { applyMiddleware } = require('graphql-middleware');
+const { shield, rule, and, or, allow } = require('graphql-shield');
+const { makeExecutableSchema } = require('@graphql-tools/schema');
 
-// 模拟数据库中的用户数据
+const isAdmin = rule()(async (parent, args, ctx, info) => {
+  return ctx.user?.role === 'admin'
+})
+const isOwner = rule()(async (parent, args, ctx, info) => {
+  return ctx.user?.items.some((id) => id === parent.id)
+})
+
+
 const users = [
-  { id: '1', name: 'Alice', email: 'alice@example.com', password: '123456' },
-  { id: '2', name: 'Bob', email: 'bob@example.com', password: 'password' },
+  { id: 'Clina123', name: 'Clina', email: 'cl@example.com', password: '123456', role: 'user' },
+  { id: 'lu_6678', name: 'lu', email: 'lu@example.com', password: 'password', role: 'admin' },
 ];
+function getUserFromToken(token) {
+  return users.find(u => u.id === token) || null;
+}
 
-// GraphQL Schema（含 password 字段，故意暴露）
+
 const typeDefs = gql`
   type User {
     id: ID!
     name: String!
     email: String!
-    password: String!  # 漏洞：不应暴露密码字段
+    password: String!
   }
 
   type Query {
@@ -22,26 +35,70 @@ const typeDefs = gql`
   }
 
   type Mutation {
-    registerUser(id: ID!, name: String!, email: String!, password: String!): User
+    addUser(id: ID!, name: String!, email: String!, password: String!): User
+    deleteUser(id: ID!): Boolean!
   }
 `;
+ 
+const permissions = shield({
+  Query: {
+    user: allow,
+    users: isAdmin
+  },
+  Mutation: {
+    deleteUser: isAdmin
+  },
+  User: {
+    password: isOwner,
+  },
+})
 
-// Resolvers 实现
 const resolvers = {
   Query: {
     users: () => users,
     user: (_, { id }) => users.find(user => user.id === id),
   },
+  Mutation: {
+    addUser: (_, { id, name, email, password }) => {
+      const newUser = { id, name, email, password };
+      users.push(newUser);
+      return newUser;
+    },
+    deleteUser: (_, { id }) => {
+      if (!id) return false;
+      const index = users.findIndex(user => user.id === id);
+      if (index === -1) return false;
+      users.splice(index, 1);
+      return true;
+    }
+  }
 };
+const rawSchema = makeExecutableSchema({
+  typeDefs,
+  resolvers,
+});
 
-// 构建 Apollo GraphQL Server
+const schema = applyMiddleware(rawSchema, permissions);
+
 async function startServer() {
   const app = express();
   const server = new ApolloServer({
+    schema,
     typeDefs,
     resolvers,
-    // introspection 默认开启，适合做攻击实验
-    // 如果要禁用，设置为 false: introspection: false,
+    introspection: false,
+    context: ({ req }) => {
+      const token = req.headers.authorization || '';
+      const user = getUserFromToken(token);
+      return { user };
+    },
+    formatError: (error) => {
+      console.error('GraphQL Error:', error.extensions);
+      
+      return {
+        code: error.extensions?.code || 'INTERNAL_ERROR'
+      };
+    }
   });
 
   await server.start();
