@@ -11,27 +11,43 @@ const isOwner = rule()(async (parent, args, ctx, info) => {
   return ctx.user?.items.some((id) => id === parent.id)
 })
 
-
+// data
 const users = [
   { id: 'Clina123', name: 'Clina', email: 'cl@example.com', password: '123456', role: 'user' },
   { id: 'lu_6678', name: 'lu', email: 'lu@example.com', password: 'password', role: 'admin' },
+  { id: '1', name: 'Alice', email: 'alice@example.com', password: '123456' },
+  { id: '2', name: 'Bob', email: 'bob@example.com', password: 'password' },
+  { id: '3', name: 'u3', email: 'u3@example.com', password: 'password' },
+  { id: '4', name: 'u4', email: 'u4@example.com', password: 'password' },
+  { id: '5', name: 'u5', email: 'u5@example.com', password: 'password' },
+  { id: '6', name: 'u6', email: 'u6@example.com', password: 'password' },
+  { id: '7', name: 'u7', email: 'u7@example.com', password: 'password' },
+  { id: '8', name: 'u8', email: 'u8@example.com', password: 'password' },
+  { id: '9', name: 'u9', email: 'u9@example.com', password: 'password' },
 ];
 function getUserFromToken(token) {
   return users.find(u => u.id === token) || null;
 }
 
 
+users.forEach(user => {
+  user.friends = users.filter(u => u.id !== user.id);
+});
+
+// GraphQL Schema
 const typeDefs = gql`
   type User {
     id: ID!
     name: String!
     email: String!
     password: String!
+    friends: [User]
   }
 
   type Query {
     users: [User]
     user(id: ID!): User
+    systemUpdate: String
   }
 
   type Mutation {
@@ -57,6 +73,13 @@ const resolvers = {
   Query: {
     users: () => users,
     user: (_, { id }) => users.find(user => user.id === id),
+    systemUpdate: () => {
+      const start = Date.now();
+      while (Date.now() - start < 5000) {
+        // blocking...
+      }
+      return `Update completed.`;
+    },
   },
   Mutation: {
     addUser: (_, { id, name, email, password }) => {
